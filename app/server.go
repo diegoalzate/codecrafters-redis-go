@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"net"
 	"os"
 )
@@ -27,10 +29,32 @@ func main() {
 	}
 
 	defer conn.Close()
-	pong := []byte("+PONG\r\n")
-	_, err = conn.Write(pong)
-	if err != nil {
-		fmt.Println("Failed to respond PONG")
-		os.Exit(1)
+	reader := bufio.NewReader(conn)
+	for {
+		str, err := reader.ReadString('\n')
+
+		fmt.Printf(">> read: %v \n", str)
+
+		if str != "PING\r\n" {
+			continue
+		}
+
+		if err != nil {
+			if err == io.EOF {
+				fmt.Println(">> eof")
+				break
+			}
+			fmt.Println(">> other err")
+			break
+		}
+
+		res := []byte("+PONG\r\n")
+		_, err = conn.Write(res)
+		if err != nil {
+			fmt.Println("Failed to respond PONG")
+			break
+		}
+		fmt.Println(">> sent pong")
 	}
+
 }
