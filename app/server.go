@@ -1,9 +1,9 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 )
@@ -12,49 +12,84 @@ import (
 var _ = net.Listen
 var _ = os.Exit
 
-func main() {
-	fmt.Println("Logs from your program will appear here!")
+//  what do we know about tcp
+// - bi directional
+// - tcp is reliant and in order
+// - there is a handshake ack to establish the connection
 
-	l, err := net.Listen("tcp", "0.0.0.0:6379")
+// golang net package
+// listen: tcp listener
+// accept: accepts incoming connections [blocking]
+// write: write to connection
+// read
+
+type Server struct {
+	addr     string
+	listener net.Listener
+}
+
+func NewServer(addr string) Server {
+	return Server{
+		addr: addr,
+	}
+}
+
+func (s *Server) start() error {
+	l, err := net.Listen("tcp", s.addr)
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379")
-		os.Exit(1)
+		return err
 	}
 
-	// blocking until a connection is accepted
-	conn, err := l.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
-	}
+	defer l.Close()
+	s.listener = l
 
-	defer conn.Close()
-	reader := bufio.NewReader(conn)
+	s.accept()
+
+	return nil
+}
+
+func (s *Server) accept() error {
 	for {
-		str, err := reader.ReadString('\n')
+		conn, err := s.listener.Accept()
 
-		fmt.Printf(">> read: %v \n", str)
-
-		if str != "PING\r\n" {
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
 			continue
 		}
 
-		if err != nil {
-			if err == io.EOF {
-				fmt.Println(">> eof")
-				break
-			}
-			fmt.Println(">> other err")
-			break
-		}
+		go s.read(conn)
 
-		res := []byte("+PONG\r\n")
-		_, err = conn.Write(res)
-		if err != nil {
-			fmt.Println("Failed to respond PONG")
-			break
-		}
-		fmt.Println(">> sent pong")
 	}
 
+}
+
+func (s *Server) read(conn net.Conn) {
+	buffer := make([]byte, 1024)
+	for {
+		_, err := conn.Read(buffer)
+
+		if err != nil {
+			fmt.Println("Error reading:", err)
+			if err == io.EOF {
+				break
+			}
+
+			continue
+		}
+
+		// read until last byte
+		log.Printf(">> buffer: %v", buffer)
+
+		_, err = conn.Write([]byte("+PONG\r\n"))
+		if err != nil {
+			fmt.Println("Error writing:", err)
+			continue
+		}
+	}
+}
+
+func main() {
+	srv := NewServer(":6379")
+	log.Fatal(srv.start())
 }
