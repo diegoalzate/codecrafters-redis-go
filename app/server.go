@@ -1,11 +1,16 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
+
+	"github.com/codecrafters-io/redis-starter-go/app/command"
+	"github.com/codecrafters-io/redis-starter-go/app/resp"
 )
 
 // Ensures gofmt doesn't remove the "net" and "os" imports in stage 1 (feel free to remove this!)
@@ -79,9 +84,27 @@ func (s *Server) read(conn net.Conn) {
 		}
 
 		// read until last byte
-		log.Printf(">> buffer: %v", buffer)
+		log.Printf(">> resp: %v", string(buffer))
 
-		_, err = conn.Write([]byte("+PONG\r\n"))
+		m, err := resp.RespRead(bufio.NewReader(bytes.NewReader(buffer)))
+
+		log.Printf(">> message: %v", string(m.StringVal))
+
+		if err != nil {
+			fmt.Println("failed to parse resp message")
+			continue
+		}
+
+		redisResp, err := command.RunCommand(m)
+
+		log.Printf(">> redisresp: %v", (redisResp))
+
+		if err != nil {
+			fmt.Println("failed to run command")
+			continue
+		}
+
+		_, err = conn.Write([]byte(redisResp))
 		if err != nil {
 			fmt.Println("Error writing:", err)
 			continue
