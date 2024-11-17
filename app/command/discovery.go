@@ -6,27 +6,50 @@ import (
 	"strings"
 
 	resp "github.com/codecrafters-io/redis-starter-go/app/resp"
+	"github.com/codecrafters-io/redis-starter-go/app/store"
 )
 
 type Command struct {
 	funcName string
-	fn       func(args []string) (string, error)
+	fn       func(store *store.Store, args []string) (string, error)
 }
 
-var commands = make(map[string]Command)
+type CommandHandler struct {
+	store    *store.Store
+	commands map[string]Command
+}
 
-func init() {
-	commands["echo"] = Command{
+func NewCommandHandler(store *store.Store) CommandHandler {
+	ch := CommandHandler{
+		commands: make(map[string]Command),
+		store:    store,
+	}
+
+	ch.registerCommands()
+
+	return ch
+}
+
+func (ch *CommandHandler) registerCommands() {
+	ch.commands["echo"] = Command{
 		funcName: "ECHO",
 		fn:       RunEcho,
 	}
-	commands["ping"] = Command{
+	ch.commands["ping"] = Command{
 		funcName: "PING",
 		fn:       RunPing,
 	}
+	ch.commands["get"] = Command{
+		funcName: "GET",
+		fn:       RunGet,
+	}
+	ch.commands["set"] = Command{
+		funcName: "SET",
+		fn:       RunSet,
+	}
 }
 
-func findCommand(m resp.Message) (Command, error) {
+func (ch *CommandHandler) findCommand(m resp.Message) (Command, error) {
 	if m.Typ != resp.ARRAY {
 		return Command{}, fmt.Errorf("unsupported resp typ: %v", string(m.Typ))
 	}
@@ -37,7 +60,7 @@ func findCommand(m resp.Message) (Command, error) {
 		return Command{}, errors.New("no first arg")
 	}
 
-	foundCommand, exists := commands[firstArg]
+	foundCommand, exists := ch.commands[firstArg]
 
 	if !exists {
 		return Command{}, errors.New("unsupported command")
@@ -46,8 +69,8 @@ func findCommand(m resp.Message) (Command, error) {
 	return foundCommand, nil
 }
 
-func RunCommand(m resp.Message) (string, error) {
-	cmd, err := findCommand(m)
+func (ch *CommandHandler) RunCommand(m resp.Message) (string, error) {
+	cmd, err := ch.findCommand(m)
 
 	if err != nil {
 		return "", err
@@ -55,10 +78,9 @@ func RunCommand(m resp.Message) (string, error) {
 
 	args := []string{}
 
-	for _, arg := range m.Values {
+	for _, arg := range m.Values[1:] {
 		args = append(args, arg.StringVal)
 	}
 
-	return cmd.fn(args)
-
+	return cmd.fn(ch.store, args)
 }

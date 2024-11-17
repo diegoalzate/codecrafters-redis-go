@@ -2,9 +2,10 @@ package command
 
 import (
 	resp "github.com/codecrafters-io/redis-starter-go/app/resp"
+	"github.com/codecrafters-io/redis-starter-go/app/store"
 )
 
-func RunEcho(args []string) (string, error) {
+func RunEcho(store *store.Store, args []string) (string, error) {
 	msg := ""
 
 	for _, word := range args {

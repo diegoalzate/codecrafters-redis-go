@@ -10,6 +10,7 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
+	"github.com/codecrafters-io/redis-starter-go/app/store"
 )
 
 // Ensures gofmt doesn't remove the "net" and "os" imports in stage 1 (feel free to remove this!)
@@ -28,13 +29,17 @@ var _ = os.Exit
 // read
 
 type Server struct {
-	addr     string
-	listener net.Listener
+	addr       string
+	listener   net.Listener
+	cmdHandler command.CommandHandler
 }
 
 func NewServer(addr string) Server {
+	store := store.NewStore()
+
 	return Server{
-		addr: addr,
+		addr:       addr,
+		cmdHandler: command.NewCommandHandler(&store),
 	}
 }
 
@@ -62,15 +67,15 @@ func (s *Server) accept() error {
 			continue
 		}
 
-		go readConnection(conn)
+		go s.readConnection(conn)
 
 	}
 
 }
 
-func readConnection(conn net.Conn) {
+func (s *Server) readConnection(conn net.Conn) {
 	for {
-		err := readMsg(conn)
+		err := s.readMsg(conn)
 
 		if err != nil {
 			if err == io.EOF {
@@ -83,10 +88,10 @@ func readConnection(conn net.Conn) {
 	}
 }
 
-func readMsg(conn net.Conn) error {
+func (s *Server) readMsg(conn net.Conn) error {
 	reader := bufio.NewReader(conn)
 
-	response, err := parse(reader)
+	response, err := s.parse(reader)
 
 	if err != nil {
 		return err
@@ -101,7 +106,7 @@ func readMsg(conn net.Conn) error {
 	return nil
 }
 
-func parse(reader *bufio.Reader) (string, error) {
+func (s *Server) parse(reader *bufio.Reader) (string, error) {
 	m, err := resp.RespRead(reader)
 
 	if err != nil {
@@ -109,7 +114,7 @@ func parse(reader *bufio.Reader) (string, error) {
 		return "", err
 	}
 
-	redisResp, err := command.RunCommand(m)
+	redisResp, err := s.cmdHandler.RunCommand(m)
 
 	if err != nil {
 		fmt.Println("failed to run command")

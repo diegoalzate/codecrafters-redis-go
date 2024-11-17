@@ -42,7 +42,7 @@ func readFlag(i *bufio.Reader) (Flag, error) {
 	typ, err := i.ReadByte()
 
 	if err != nil {
-		return 0, err
+		return "", err
 	}
 
 	return NewFlag(typ)

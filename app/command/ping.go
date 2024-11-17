@@ -1,5 +1,7 @@
 package command
 
-func RunPing(args []string) (string, error) {
+import "github.com/codecrafters-io/redis-starter-go/app/store"
+
+func RunPing(store *store.Store, args []string) (string, error) {
 	return "+PONG\r\n", nil
 }
