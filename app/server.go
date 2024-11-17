@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -63,53 +62,61 @@ func (s *Server) accept() error {
 			continue
 		}
 
-		go s.read(conn)
+		go readConnection(conn)
 
 	}
 
 }
 
-func (s *Server) read(conn net.Conn) {
-	buffer := make([]byte, 1024)
+func readConnection(conn net.Conn) {
 	for {
-		_, err := conn.Read(buffer)
+		err := readMsg(conn)
 
 		if err != nil {
-			fmt.Println("Error reading:", err)
 			if err == io.EOF {
-				break
+				fmt.Println("Client disconnected")
+				return
 			}
-
-			continue
-		}
-
-		// read until last byte
-		log.Printf(">> resp: %v", string(buffer))
-
-		m, err := resp.RespRead(bufio.NewReader(bytes.NewReader(buffer)))
-
-		log.Printf(">> message: %v", string(m.StringVal))
-
-		if err != nil {
-			fmt.Println("failed to parse resp message")
-			continue
-		}
-
-		redisResp, err := command.RunCommand(m)
-
-		log.Printf(">> redisresp: %v", (redisResp))
-
-		if err != nil {
-			fmt.Println("failed to run command")
-			continue
-		}
-
-		_, err = conn.Write([]byte(redisResp))
-		if err != nil {
-			fmt.Println("Error writing:", err)
-			continue
+			fmt.Printf("Error reading message: %v\n", err)
+			return
 		}
 	}
+}
+
+func readMsg(conn net.Conn) error {
+	reader := bufio.NewReader(conn)
+
+	response, err := parse(reader)
+
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Write([]byte(response))
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func parse(reader *bufio.Reader) (string, error) {
+	m, err := resp.RespRead(reader)
+
+	if err != nil {
+		fmt.Println("failed to parse resp message")
+		return "", err
+	}
+
+	redisResp, err := command.RunCommand(m)
+
+	if err != nil {
+		fmt.Println("failed to run command")
+		return "", err
+	}
+
+	return redisResp, nil
 }
 
 func main() {
